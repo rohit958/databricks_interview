@@ -314,3 +314,198 @@ df_reviews.printSchema()
 df_combined= df_movies.join(df_reviews, df_movies.id==df_reviews.movie_id, how="inner").groupBy(df_movies.genre).agg(avg(col("rating")).alias("avg_rating"))
 df_final=df_combined.withColumn('rating_stars', when(col("avg_rating").between (0,1.0),"").when(col("avg_rating").between (1.1 , 1.9),"*").when(col("avg_rating").between(2.0 ,2.9),"**").when(col("avg_rating").between(3.0, 3.9),"***").when(col("avg_rating").between (4.0 , 4.9),"****").when(col("avg_rating")==5, "*****"))
 display(df_final)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## mother father relation
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("SQLtoPySpark").getOrCreate()
+
+# --- Create 'people' DataFrame ---
+
+# Define the schema for the 'people' table
+people_schema = StructType([
+    StructField("id", IntegerType(), nullable=False),
+    StructField("name", StringType(), nullable=True),
+    StructField("gender", StringType(), nullable=True)
+])
+
+# Define the data for the 'people' table
+people_data = [
+    (107, 'Days', 'F'),
+    (145, 'Hawbaker', 'M'),
+    (155, 'Hansel', 'F'),
+    (202, 'Blackston', 'M'),
+    (227, 'Criss', 'F'),
+    (278, 'Keffer', 'M'),
+    (305, 'Canty', 'M'),
+    (329, 'Mozingo', 'M'),
+    (425, 'Nolf', 'M'),
+    (534, 'Waugh', 'M'),
+    (586, 'Tong', 'M'),
+    (618, 'Dimartino', 'M'),
+    (747, 'Beane', 'M'),
+    (878, 'Chatmon', 'F'),
+    (904, 'Hansard', 'F')
+]
+
+# Create the 'people' DataFrame
+df_people = spark.createDataFrame(people_data, schema=people_schema)
+
+print("DataFrame 'people':")
+df_people.show()
+df_people.printSchema()
+
+# --- Create 'relations' DataFrame ---
+
+# Define the schema for the 'relations' table
+relations_schema = StructType([
+    StructField("c_id", IntegerType(), nullable=True),
+    StructField("p_id", IntegerType(), nullable=True)
+])
+
+# Define the data for the 'relations' table
+relations_data = [
+    (145, 202),
+    (145, 107),
+    (278, 305),
+    (278, 155),
+    (329, 425),
+    (329, 227),
+    (534, 586),
+    (534, 878),
+    (618, 747),
+    (618, 904)
+]
+
+# Create the 'relations' DataFrame
+df_relations = spark.createDataFrame(relations_data, schema=relations_schema)
+
+print("\nDataFrame 'relations':")
+df_relations.show()
+df_relations.printSchema()
+
+# Note on Foreign Keys in PySpark:
+# PySpark DataFrames do not enforce foreign key constraints at the schema level 
+# like a traditional SQL database. The structure above accurately represents the 
+# data and column types, but the application logic must handle referential 
+# integrity.
+
+
+# COMMAND ----------
+
+df_father=df_people.join(df_relations, df_people.id==df_relations.p_id, how="inner").filter(df_people.gender=="M").select(df_people.name.alias("father"), df_relations.c_id.alias("child_id"))
+df_mother=df_people.join(df_relations, df_people.id==df_relations.p_id, how="inner").filter(df_people.gender=="F").select(df_people.name.alias("mother"),df_relations.c_id.alias("child_id"))
+
+df_final=df_people.join(df_father, df_people.id==df_father.child_id, how="inner").join(df_mother, df_people.id==df_mother.child_id, how="inner").select(df_people.id.alias("child ID"),df_people.name.alias("child"), df_father.father.alias("father name"), df_mother.mother.alias("mother name"))
+display(df_final)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##Flights
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("FlightsToPySpark").getOrCreate()
+
+# --- Create 'flights' DataFrame ---
+
+# Define the schema for the 'flights' table
+flights_schema = StructType([
+    StructField("cid", StringType(), nullable=True),
+    StructField("fid", StringType(), nullable=True),
+    StructField("origin", StringType(), nullable=True),
+    StructField("Destination", StringType(), nullable=True)
+])
+
+# Define the data for the 'flights' table
+flights_data = [
+    ('1', 'f1', 'Del', 'Hyd'),
+    ('1', 'f2', 'Hyd', 'Blr'),
+    ('2', 'f3', 'Mum', 'Agra'),
+    ('2', 'f4', 'Agra', 'Kol')
+]
+
+# Create the 'flights' DataFrame
+df_flights = spark.createDataFrame(flights_data, schema=flights_schema)
+
+print("DataFrame 'flights':")
+df_flights.show()
+df_flights.printSchema()
+
+
+# COMMAND ----------
+
+df_final_loc=df_flights.alias("f1").join(df_flights.alias("f2"), (col("f1.Destination")==col("f2.origin")) & (col("f1.cid")==col("f2.cid")),how="inner").select(col("f1.origin").alias("start_loc"), col("f2.Destination").alias("end_loc"))
+display(df_final_loc)
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## first customer count in each month
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, DateType, StringType, IntegerType
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("SalesData").getOrCreate()
+
+# Define the schema
+schema = [
+    "order_date",
+    "customer",
+    "qty"
+]
+
+# Define the data as a list of tuples (matching the SQL INSERT statements)
+data = [
+    ('2021-01-01', 'C1', 20),
+    ('2021-01-01', 'C2', 30),
+    ('2021-02-01', 'C1', 10),
+    ('2021-02-01', 'C3', 15),
+    ('2021-03-01', 'C5', 19),
+    ('2021-03-01', 'C4', 10),
+    ('2021-04-01', 'C3', 13),
+    ('2021-04-01', 'C5', 15),
+    ('2021-04-01', 'C6', 10)
+]
+
+# Convert the data to a list of rows for the schema definition
+from pyspark.sql import Row
+rows = [Row(order_date=r[0], customer=r[1], qty=r[2]) for r in data]
+
+# Create the PySpark DataFrame
+sales_df = spark.createDataFrame(rows, schema)
+
+# Show the resulting DataFrame
+sales_df.show()
+
+# Print the schema to verify types
+sales_df.printSchema()
+
+
+# COMMAND ----------
+
+df_cleaned=sales_df.withColumn("order_date",sales_df.order_date.cast(DateType()))
+
+df_agg=df_cleaned.withColumn('first_date',min(col("order_date")).over(Window.partitionBy('customer')))\
+    .withColumn('order_month',concat_ws("-",month(col("order_date")),year(col("order_date"))))
+
+df_final=df_agg.filter(df_agg.order_date==df_agg.first_date).groupBy(col("order_month")).agg(count(col("customer")).alias("first_customers_count"))
+
+display(df_final)
